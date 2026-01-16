@@ -10,12 +10,8 @@ enum WebSocketMessage {
 class WebSocketManager: ObservableObject {
     static let shared = WebSocketManager()
     
-    // Replace with your local IP if running on device!
-    // For Simulator -> localhost is fine
-    // private let url = URL(string: "ws://localhost:8080")! 
-    // To support deep links from other devices, we need IP.
-    // I'll default to localhost for now, user might change.
-    private let url = URL(string: "ws://10.25.254.242:8080")!
+    // Cloud Server URL (Render)
+    private let url = URL(string: "wss://tictactoe-signaling.onrender.com")!
     
     private var webSocketTask: URLSessionWebSocketTask?
     

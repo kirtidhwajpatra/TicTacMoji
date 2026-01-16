@@ -162,9 +162,7 @@ class TicTacToeViewModel: ObservableObject {
         if checkForWin(player: player) {
             gameState = .won(player)
             if isLocalPlayer(player: player) {
-                p1Score += (player == .p1 ? 1 : 0) // Track score logic might need split? Assumes P1/P2 score tracking.
-                // Actually p1Score usually maps to P1.
-                // Just play sound based on perspective
+                // Sound logic
                 SoundManager.shared.playWinSound()
             } else {
                  SoundManager.shared.playLoseSound()
