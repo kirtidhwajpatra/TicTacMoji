@@ -160,15 +160,16 @@ class TicTacToeViewModel: ObservableObject {
         
         board[index] = player
         HapticManager.shared.lightImpact()
-        SoundManager.shared.playClickSound()
+        
+        // Play Move Sound
+        let isMine = isLocalPlayer(player: player)
+        SoundManager.shared.playMoveSound(isMine: isMine)
         
         if checkForWin(player: player) {
             gameState = .won(player)
-            if isLocalPlayer(player: player) {
-                // Sound logic
+            if isMine {
+                // Only play Win sound if I won
                 SoundManager.shared.playWinSound()
-            } else {
-                 SoundManager.shared.playLoseSound()
             }
             
             // Score update (Server tracks or local?)
@@ -220,6 +221,8 @@ class TicTacToeViewModel: ObservableObject {
     }
     
     func resetGame(keepOnline: Bool = false) {
+        SoundManager.shared.stopSound() // Stop any winning/loss sound
+        
         if gameMode == .onlineServer && !keepOnline {
             // Initiate rematch request
             wsManager?.requestRematch()

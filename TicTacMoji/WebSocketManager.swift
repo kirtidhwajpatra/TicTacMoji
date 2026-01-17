@@ -11,7 +11,10 @@ class WebSocketManager: ObservableObject {
     static let shared = WebSocketManager()
     
     // Cloud Server URL (Render)
+    // Use localhost for instant responsiveness during dev/simulator testing
+    // private let url = URL(string: "ws://localhost:8080")!
     private let url = URL(string: "wss://tictactoe-signaling.onrender.com")!
+
     
     private var webSocketTask: URLSessionWebSocketTask?
     

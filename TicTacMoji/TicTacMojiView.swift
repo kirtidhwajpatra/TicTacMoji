@@ -11,7 +11,10 @@ struct TicTacToeView: View {
     
     init(gameMode: GameMode = .vsHuman, onDismiss: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: TicTacToeViewModel(gameMode: gameMode))
-        self.customDismiss = onDismiss
+        self.customDismiss = {
+            SoundManager.shared.stopSound()
+            onDismiss?()
+        }
     }
     
     var customDismiss: (() -> Void)?
@@ -19,7 +22,15 @@ struct TicTacToeView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                // Base Background (Always White)
                 Color.white.ignoresSafeArea()
+                
+                // Winning Overlay
+                if case .won = viewModel.gameState {
+                    WinningGradient()
+                        .ignoresSafeArea()
+                        .transition(.opacity.animation(.easeInOut(duration: 1.0)))
+                }
                 
                 if isLoading {
                     LoadingScreen()
@@ -138,9 +149,10 @@ struct GameContent: View {
                     NotebookBackground()
                         .frame(width: boardSize, height: boardSize)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.15), lineWidth: 1)) // Thinnest
+                        .shadow(color: Color.black.opacity(0.1), radius: 12, x: 0, y: 8)
                     BoardGrid(viewModel: viewModel, size: boardSize)
-                        .padding(20)
+                        .padding(60) // Increased padding significantly
                 }
                 .frame(width: boardSize, height: boardSize)
                 
@@ -262,6 +274,7 @@ struct PlayerTurnIcon: View {
     
     // Breathing Animation State
     @State private var breathe = false
+    @State private var pop = false // New Pop State
     
     var body: some View {
         ZStack {
@@ -278,11 +291,24 @@ struct PlayerTurnIcon: View {
                     }
             }
             Text(icon).font(.system(size: 28))
-                .scaleEffect(isActive ? 1.1 : 1.0)
+                .scaleEffect(pop ? 1.3 : (isActive ? 1.1 : 1.0)) // POP scale
+                .rotationEffect(.degrees(pop ? 15 : 0)) // Slight tilt
         }
         .frame(width: 50, height: 50)
         .opacity(isActive ? 1.0 : 0.4)
-        .animation(.spring(), value: isActive)
+        .onChange(of: isActive) { newValue in
+            if newValue {
+                // Trigger POP when becoming active
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    pop = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        pop = false
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -296,21 +322,27 @@ struct BoardGrid: View {
             // Grid Lines with DRAW Animation? 
             // Keeping it simple static for performance, but adding opacity transition
             VStack(spacing: 0) {
-                Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(height: 2); Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(height: 2); Spacer()
+                Spacer(); Rectangle().fill(Color.black).frame(height: 2); Spacer(); Rectangle().fill(Color.black).frame(height: 2); Spacer()
             }.frame(width: effectiveSize, height: effectiveSize)
             HStack(spacing: 0) {
-                Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(width: 2); Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(width: 2); Spacer()
+                Spacer(); Rectangle().fill(Color.black).frame(width: 2); Spacer(); Rectangle().fill(Color.black).frame(width: 2); Spacer()
             }.frame(width: effectiveSize, height: effectiveSize)
             
             VStack(spacing: 0) {
                 ForEach(0..<3) { row in
                     HStack(spacing: 0) {
                         ForEach(0..<3) { col in
+                            let index = row * 3 + col
+                            let isWinning = viewModel.winningIndices.contains(index)
+                            let isGameOver = !viewModel.winningIndices.isEmpty
+                            
                             TicTacCell(
-                                player: viewModel.board[row * 3 + col],
+                                player: viewModel.board[index],
                                 p1Icon: viewModel.p1Avatar,
                                 p2Icon: viewModel.p2Avatar,
-                                action: { viewModel.processMove(at: row * 3 + col) },
+                                isWinning: isWinning,
+                                isDimmed: isGameOver && !isWinning,
+                                action: { viewModel.processMove(at: index) },
                                 size: cellSize
                             ).frame(width: cellSize, height: cellSize)
                         }
@@ -324,9 +356,9 @@ struct BoardGrid: View {
 struct NotebookBackground: View {
     var body: some View {
         ZStack {
-            Color(hex: "F7F7F7")
+            Color(hex: "F2F2F2") // Slightly darker paper (was F7F7F7)
             notebook_bg_path_shape()
-                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1) // Darker lines
         }
     }
 }
@@ -346,8 +378,13 @@ struct TicTacCell: View {
     let player: Player?
     let p1Icon: String
     let p2Icon: String
+    let isWinning: Bool
+    var isDimmed: Bool = false
     let action: () -> Void
     let size: CGFloat
+    
+    @State private var rotateRainbow = false
+    
     var body: some View {
         Button(action: action) {
             ZStack {
@@ -356,16 +393,80 @@ struct TicTacCell: View {
                     .contentShape(Rectangle())
                 
                 if let player = player {
+                    // Subtle Background Glow for Winners
+                    if isWinning {
+                        Circle()
+                            .fill(
+                                AngularGradient(gradient: Gradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red]), center: .center)
+                            )
+                            .frame(width: size * 0.85, height: size * 0.85)
+                            .blur(radius: 10) // Soft Glow effect
+                            .opacity(0.5)
+                            .rotationEffect(.degrees(rotateRainbow ? 360 : 0))
+                            .onAppear {
+                                withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+                                    rotateRainbow = true
+                                }
+                            }
+                    } else {
+                        // Move Splash Effect (Only once on appear)
+                        if showSplash {
+                             Circle()
+                                .stroke(Color.gray.opacity(0.4), lineWidth: 2)
+                                .scaleEffect(splashCheck ? 1.5 : 0.5)
+                                .opacity(splashCheck ? 0 : 1)
+                        }
+                    }
+                    
                     Text(player == .p1 ? p1Icon : p2Icon)
-                        .font(.system(size: size * 0.6))
-                        .shadow(radius: 1)
-                        // Bouncy Spring Transition
+                        .font(.system(size: size * 0.6)) // Standard Size
+                        .shadow(radius: isWinning ? 2 : 1)
+                        .opacity(isDimmed ? 0.3 : 1.0) // Dim losers
+                        .grayscale(isDimmed ? 1.0 : 0.0) // Optional: Grayscale losers
+                        // Bouncy Entrance
                         .transition(.scale(scale: 0.1).combined(with: .opacity).animation(.spring(response: 0.4, dampingFraction: 0.5)))
+                        .onAppear {
+                            // Trigger Splash
+                            // Use a slight delay to sync with bounce
+                            showSplash = true
+                            withAnimation(.easeOut(duration: 0.5)) {
+                                splashCheck = true
+                            }
+                        }
                 }
             }
             .contentShape(Rectangle()) // Explicit hit testing shape
         }
         .buttonStyle(PlainButtonStyle()) // Don't scale cell on press logic (handled by ViewModel logic probably or we can add small press)
+    }
+    @State private var showSplash = false
+    @State private var splashCheck = false
+}
+
+struct WinningGradient: View {
+    @State private var start = UnitPoint(x: -1, y: -1)
+    @State private var end = UnitPoint(x: 0, y: 0)
+    
+    let colors = [
+        Color.white,
+        Color.yellow.opacity(0.02),
+        Color.white,
+        Color.cyan.opacity(0.01),
+        Color.white,
+        Color.orange.opacity(0.01),
+        Color.white
+    ]
+    
+    var body: some View {
+        LinearGradient(gradient: Gradient(colors: colors), startPoint: start, endPoint: end)
+            .onAppear {
+                withAnimation(.linear(duration: 10).repeatForever(autoreverses: true)) {
+                    start = UnitPoint(x: 1, y: 1)
+                    end = UnitPoint(x: 2, y: 2)
+                }
+            }
+            .blur(radius: 60)
+            .opacity(0.3) // Reduced form 0.6
     }
 }
 
