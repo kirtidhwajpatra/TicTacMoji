@@ -7,14 +7,18 @@
 
 import SwiftUI
 
-struct TicTacToeTheme {
-    static let background = Color.black
-    static let accent = Color(red: 255/255, green: 215/255, blue: 0/255) // Gold/Yellow
-    static let gridLine = Color.white.opacity(0.2)
-    static let text = Color.white
+struct TicTacMojiTheme {
+    // Neon Noir Palette
+    static let backgroundStart = Color(hex: "1A1A1A") // Dark Graphite
+    static let backgroundEnd = Color(hex: "050505")   // Deep Black
     
-    // Emojis from your design
-    static let player1Icon = "🌻" // Sunflower
-    static let player2Icon = "🍄" // Mushroom
-    static let fontName = "RoundedMplus1c-ExtraBold" // System rounded fallback used in code
+    static let neonBlue = Color(hex: "00F0FF")        // Cyber Blue
+    static let neonPink = Color(hex: "FF0099")        // Cyber Pink
+    static let neonGreen = Color(hex: "39FF14")       // Neon Green (Win)
+    static let glassBorder = Color.white.opacity(0.15)
+    static let glassSurface = Color.white.opacity(0.05)
+    
+    static let textPrimary = Color.white
+    static let textSecondary = Color.white.opacity(0.6)
 }
+

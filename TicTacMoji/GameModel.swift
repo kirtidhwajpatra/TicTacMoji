@@ -18,8 +18,8 @@ enum Player: Equatable {
     
     var icon: String {
         switch self {
-        case .p1: return TicTacToeTheme.player1Icon
-        case .p2: return TicTacToeTheme.player2Icon
+        case .p1: return "🍄"
+        case .p2: return "🌼"
         }
     }
     

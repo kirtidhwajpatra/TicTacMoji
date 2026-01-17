@@ -4,11 +4,11 @@ import SwiftUI
 struct TicTacToeView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel: TicTacToeViewModel
-    
-    // Simulate Loading State
     @State private var isLoading = true
     
-    // Init with dependencies (simplified)
+    // Win Line Animation
+    @State private var showWinLine = false
+    
     init(gameMode: GameMode = .vsHuman, onDismiss: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: TicTacToeViewModel(gameMode: gameMode))
         self.customDismiss = onDismiss
@@ -17,289 +17,358 @@ struct TicTacToeView: View {
     var customDismiss: (() -> Void)?
     
     var body: some View {
-        ZStack {
-            Color(hex: "F2F2F7").ignoresSafeArea() // Use theme background color
-            
-            if isLoading {
-                LoadingScreen()
-                    .transition(.opacity)
-                    .onAppear {
-                        // Fake loading delay
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            withAnimation {
-                                isLoading = false
+        GeometryReader { geo in
+            ZStack {
+                Color.white.ignoresSafeArea()
+                
+                if isLoading {
+                    LoadingScreen()
+                        .transition(.opacity)
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                withAnimation { isLoading = false }
                             }
                         }
-                    }
-            } else {
-                GameContent(viewModel: viewModel, onDismiss: {
-                    customDismiss?() ?? dismiss()
-                })
-                .transition(.opacity)
-            }
-            
-            // Win Overlay
-            // Only show confetti if WE won
-            if case .won(let winner) = viewModel.gameState, 
-               viewModel.gameResultText == "You Won!" {
-                ConfettiView()
-                    .allowsHitTesting(false)
+                } else {
+                    GameContent(viewModel: viewModel, onDismiss: {
+                        customDismiss?() ?? dismiss()
+                    }, screenSize: geo.size)
+                    .transition(.opacity)
+                }
+                
+                if case .won(let winner) = viewModel.gameState,
+                   viewModel.gameResultText == "You Won!" {
+                    ConfettiView().allowsHitTesting(false)
+                }
             }
         }
     }
 }
 
-// MARK: - 1. Loading Screen
+// MARK: - Loading View
 struct LoadingScreen: View {
+    @State private var scale = 0.8
     var body: some View {
         VStack {
             Spacer()
-            
-            // App Icon Style
             ZStack {
                 RoundedRectangle(cornerRadius: 32)
-                    .fill(Color(hex: "EF553B")) // Red color
-                    .frame(width: 140, height: 140)
-                    .shadow(color: Color(hex: "EF553B").opacity(0.3), radius: 15, y: 10)
-                
-                Circle()
-                    .fill(Color(hex: "952B1E")) // Darker red
-                    .frame(width: 60, height: 60)
-                    .offset(y: -10)
-                
-                Text("TicTacToe")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.white)
-                    .offset(y: 40)
+                    .fill(Color(hex: "FDE047"))
+                    .frame(width: 120, height: 120)
+                    .scaleEffect(scale)
+                Text("🍄")
+                    .font(.system(size: 60))
+                    .scaleEffect(scale)
             }
-            
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    scale = 1.0
+                }
+            }
             Spacer()
-            
-            Text("Loading...")
-                .font(.system(size: 18))
-                .foregroundColor(.gray)
-                .padding(.bottom, 50)
         }
     }
 }
 
-// MARK: - 2. Game Content
+// MARK: - Game Content
 struct GameContent: View {
     @ObservedObject var viewModel: TicTacToeViewModel
     let onDismiss: () -> Void
+    let screenSize: CGSize
+    
+    var isLandscape: Bool { screenSize.width > screenSize.height }
+    
+    var boardSize: CGFloat {
+        let dim = min(screenSize.width, screenSize.height)
+        return isLandscape ? min(dim * 0.85, 700) : min(dim * 0.9, 600)
+    }
     
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             // Header
-            HStack(alignment: .top) {
+            HStack {
                 Button(action: onDismiss) {
-                    Image(systemName: "arrow.turn.up.left")
-                        .font(.system(size: 20))
-                        .padding(12)
-                        .background(Color.white)
-                        .clipShape(Circle())
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.black)
+                        .padding(10)
+                        .background(Color(hex: "F3F4F6"))
+                        .clipShape(Circle())
                 }
+                .buttonStyle(ScaleButtonStyle()) // Haptic Button
                 
                 Spacer()
-                
-                // Scoreboard Card
-                HStack(spacing: 0) {
-                    // Player 1
-                    VStack {
-                        Text(viewModel.p1Avatar)
-                            .font(.system(size: 30))
-                        Text("\(viewModel.p1Score)")
-                            .font(.system(size: 24, weight: .bold))
-                        Text(viewModel.p1Name)
-                            .font(.caption)
-                            .lineLimit(1)
-                    }
-                    .frame(width: 80)
-                    
-                    Divider().frame(height: 40)
-                    
-                    // Player 2
-                    VStack {
-                        Text(viewModel.p2Avatar)
-                            .font(.system(size: 30))
-                        Text("\(viewModel.p2Score)")
-                            .font(.system(size: 24, weight: .bold))
-                        Text(viewModel.p2Name)
-                            .font(.caption)
-                            .lineLimit(1)
-                    }
-                    .frame(width: 80)
-                }
-                .padding(.vertical, 8)
-                .background(Color.white)
-                .cornerRadius(16)
-                .shadow(radius: 2)
-                .foregroundColor(.black) // Ensure text is visible on white background
+                ScorePill(viewModel: viewModel)
             }
-            .padding()
+            .padding(.horizontal, 24)
+            .padding(.top, 10)
             
-            Spacer()
-            
-            // Status Message
-            if case .active = viewModel.gameState {
-                Text(viewModel.turnMessage)
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .foregroundColor(Color.black.opacity(0.7))
-                    .padding(.top, 10)
+            if isLandscape {
+                HStack(spacing: 40) {
+                    VStack {
+                        Spacer()
+                        ZStack {
+                            NotebookBackground()
+                                .frame(width: boardSize, height: boardSize)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                            BoardGrid(viewModel: viewModel, size: boardSize)
+                                .padding(20)
+                        }
+                        .frame(width: boardSize, height: boardSize)
+                        Spacer()
+                    }
+                    .padding(.leading, 40)
+                    
+                    VStack(spacing: 30) {
+                        Spacer()
+                        StatusSection(viewModel: viewModel)
+                        TurnIndicatorSection(viewModel: viewModel)
+                        Spacer()
+                    }
+                    .frame(maxWidth: 300)
+                    .padding(.trailing, 40)
+                }
             } else {
-                VStack(spacing: 4) {
-                    if viewModel.gameResultText.contains("Won") {
-                        Text("Congratulations🎉")
-                            .font(.system(size: 20, weight: .medium, design: .rounded))
-                            .foregroundColor(.gray)
-                        Text(viewModel.gameResultText.replacingOccurrences(of: " Won!", with: ""))
-                            .font(.system(size: 36, weight: .bold, design: .rounded))
-                            .foregroundColor(.black)
-                    } else {
-                        Text(viewModel.gameState == .draw ? "It's a Draw!" : viewModel.gameResultText)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundColor(viewModel.gameResultText.contains("Lost") ? .red : .black)
-                    }
-                }
-                .padding(.bottom, 30)
-                .transition(.scale.combined(with: .opacity))
-            }
-                
                 Spacer()
+                StatusSection(viewModel: viewModel)
+                    .padding(.bottom, 20)
                 
-                // Game Board (Clean White Card)
                 ZStack {
-                    // Background
-                    RoundedRectangle(cornerRadius: 30)
-                        .fill(Color.white)
-                        .shadow(color: .black.opacity(0.08), radius: 20, x: 0, y: 10)
-                        .frame(width: 320, height: 320)
-                    
-                    // Grid
-                    VStack(spacing: 0) {
-                        ForEach(0..<3) { row in
-                            HStack(spacing: 0) {
-                                ForEach(0..<3) { col in
-                                    let index = row * 3 + col
-                                    TicTacCell(
-                                        content: viewModel.board[index],
-                                        p1Icon: viewModel.p1Avatar,
-                                        p2Icon: viewModel.p2Avatar
-                                    )
-                                    .onTapGesture {
-                                        viewModel.processMove(at: index)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .frame(width: 300, height: 300)
-                    
-                    // Custom Grid Lines (Thinner, lighter)
-                    HStack(spacing: 98) {
-                        Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 2, height: 280)
-                        Rectangle().fill(Color.gray.opacity(0.2)).frame(width: 2, height: 280)
-                    }
-                    VStack(spacing: 98) {
-                        Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 2).frame(width: 280)
-                        Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 2).frame(width: 280)
-                    }
+                    NotebookBackground()
+                        .frame(width: boardSize, height: boardSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                    BoardGrid(viewModel: viewModel, size: boardSize)
+                        .padding(20)
                 }
+                .frame(width: boardSize, height: boardSize)
                 
                 Spacer()
                 
-                // Bottom Controls
-                if viewModel.gameState != .active {
-                    VStack(spacing: 16) {
-                        if viewModel.waitingForRematch {
-                            HStack {
-                                ProgressView()
-                                    .padding(.trailing, 8)
-                                Text("Waiting for opponent...")
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                            .padding()
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                            .shadow(color: .black.opacity(0.05), radius: 5)
-                        } else {
-                            if viewModel.isOpponentReady {
-                                Text("\(viewModel.p2Name) wants to play!")
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundColor(.black)
-                            }
-                            
-                            Button(action: {
-                                viewModel.resetGame()
-                            }) {
-                                HStack {
-                                    Text(viewModel.isOpponentReady ? "Accept Rematch" : "Play Again")
-                                    Image(systemName: "arrow.right")
-                                }
-                                .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 18)
-                                .background(Color(hex: "D0FD3E")) // Exact Lime Green
-                                .clipShape(Capsule())
-                                .shadow(color: Color(hex: "D0FD3E").opacity(0.5), radius: 10, y: 5)
-                            }
-                        }
-                    }
+                TurnIndicatorSection(viewModel: viewModel)
                     .padding(.bottom, 40)
-                } else {
-                    // Turn Indicator (Clean)
-                    HStack(spacing: 40) {
-                        CircleIcon(icon: viewModel.p1Avatar, isActive: viewModel.activePlayer == .p1)
-                        CircleIcon(icon: viewModel.p2Avatar, isActive: viewModel.activePlayer == .p2)
-                    }
-                    .padding(.bottom, 40)
-                }
-            }
-        }
-    
-}
-    
-struct TicTacCell: View {
-    let content: Player?
-    let p1Icon: String
-    let p2Icon: String
-    
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(Color.white)
-                .frame(width: 100, height: 100)
-            
-            if let player = content {
-                Text(player == .p1 ? p1Icon : p2Icon)
-                    .font(.system(size: 60))
-                    .transition(.scale.combined(with: .opacity))
             }
         }
     }
 }
-    
-struct CircleIcon: View {
+
+// MARK: - Subviews
+
+struct ScorePill: View {
+    @ObservedObject var viewModel: TicTacToeViewModel
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 4) {
+                Text(viewModel.p1Avatar)
+                Text("\(viewModel.p1Score)").fontWeight(.bold)
+            }
+            HStack(spacing: 4) {
+                Text(viewModel.p2Avatar)
+                Text("\(viewModel.p2Score)").fontWeight(.bold)
+            }
+        }
+        .font(.system(size: 16, design: .rounded))
+        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .background(Color(hex: "F3F4F6"))
+        .clipShape(Capsule())
+        .foregroundColor(.black)
+    }
+}
+
+struct StatusSection: View {
+    @ObservedObject var viewModel: TicTacToeViewModel
+    var body: some View {
+        VStack(spacing: 8) {
+            if case .won = viewModel.gameState {
+                // Logic for Header Title
+                let isLoss = viewModel.gameResultText.contains("Lost")
+                
+                Text(isLoss ? "Game Over 😢" : "Congratulations🎉")
+                    .font(.system(size: 16, design: .rounded))
+                    .foregroundColor(.gray)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                
+                Text(viewModel.gameResultText.replacingOccurrences(of: " Won!", with: ""))
+                    .font(.system(size: 32, weight: .medium, design: .rounded))
+                    .foregroundColor(.black)
+                    .transition(.scale.combined(with: .opacity))
+            } else if case .draw = viewModel.gameState {
+                Text("Draw!")
+                    .font(.system(size: 32, weight: .medium, design: .rounded))
+                    .foregroundColor(.black)
+            } else {
+                Text(viewModel.turnMessage)
+                    .font(.system(size: 24, weight: .medium, design: .rounded))
+                    .foregroundColor(.gray)
+                    .transition(.opacity)
+                    .id("TurnMessage" + viewModel.turnMessage) // Refresh animation on text change
+            }
+        }
+        .animation(.spring(), value: viewModel.gameState)
+    }
+}
+
+struct TurnIndicatorSection: View {
+    @ObservedObject var viewModel: TicTacToeViewModel
+    var body: some View {
+        Group {
+            if case .active = viewModel.gameState {
+                HStack(spacing: 30) {
+                    PlayerTurnIcon(icon: viewModel.p1Avatar, isActive: viewModel.activePlayer == .p1)
+                    PlayerTurnIcon(icon: viewModel.p2Avatar, isActive: viewModel.activePlayer == .p2)
+                }
+            } else {
+                VStack(spacing: 8) {
+                    if viewModel.isOpponentReady {
+                        Text("Opponent wants to play!")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundColor(.black)
+                            .transition(.scale)
+                    }
+                    
+                    Button(action: { viewModel.resetGame() }) {
+                        HStack {
+                            if viewModel.waitingForRematch {
+                                ProgressView()
+                                    .tint(.black)
+                                Text("Waiting...")
+                            } else {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text(viewModel.isOpponentReady ? "Accept Rematch" : "Play Again")
+                            }
+                        }
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.black)
+                        .padding(.vertical, 16)
+                        .padding(.horizontal, 32)
+                        .background(Color(hex: "FDE047"))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(ScaleButtonStyle()) // Haptic
+                    .disabled(viewModel.waitingForRematch) // Prevent double sending
+                    .opacity(viewModel.waitingForRematch ? 0.6 : 1.0)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+    }
+}
+
+struct PlayerTurnIcon: View {
     let icon: String
     let isActive: Bool
     
+    // Breathing Animation State
+    @State private var breathe = false
+    
     var body: some View {
         ZStack {
-            Circle()
-                .fill(Color.white)
-                .frame(width: 50, height: 50)
-                .shadow(color: .black.opacity(0.1), radius: 5, y: 2)
-                .overlay(
-                    Circle().stroke(isActive ? Color.green : Color.clear, lineWidth: 2)
-                )
-            
-            Text(icon)
-                .font(.system(size: 24))
+            if isActive {
+                Circle()
+                    .stroke(Color.green, lineWidth: 2)
+                    .frame(width: 50, height: 50)
+                    .scaleEffect(breathe ? 1.05 : 0.95) // Subtle pulse
+                    .opacity(breathe ? 1.0 : 0.7)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                            breathe = true
+                        }
+                    }
+            }
+            Text(icon).font(.system(size: 28))
+                .scaleEffect(isActive ? 1.1 : 1.0)
         }
-        .scaleEffect(isActive ? 1.1 : 1.0)
+        .frame(width: 50, height: 50)
+        .opacity(isActive ? 1.0 : 0.4)
         .animation(.spring(), value: isActive)
     }
+}
+
+struct BoardGrid: View {
+    @ObservedObject var viewModel: TicTacToeViewModel
+    let size: CGFloat
+    var body: some View {
+        let effectiveSize = size - 40
+        let cellSize = effectiveSize / 3
+        ZStack {
+            // Grid Lines with DRAW Animation? 
+            // Keeping it simple static for performance, but adding opacity transition
+            VStack(spacing: 0) {
+                Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(height: 2); Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(height: 2); Spacer()
+            }.frame(width: effectiveSize, height: effectiveSize)
+            HStack(spacing: 0) {
+                Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(width: 2); Spacer(); Rectangle().fill(Color.black.opacity(0.8)).frame(width: 2); Spacer()
+            }.frame(width: effectiveSize, height: effectiveSize)
+            
+            VStack(spacing: 0) {
+                ForEach(0..<3) { row in
+                    HStack(spacing: 0) {
+                        ForEach(0..<3) { col in
+                            TicTacCell(
+                                player: viewModel.board[row * 3 + col],
+                                p1Icon: viewModel.p1Avatar,
+                                p2Icon: viewModel.p2Avatar,
+                                action: { viewModel.processMove(at: row * 3 + col) },
+                                size: cellSize
+                            ).frame(width: cellSize, height: cellSize)
+                        }
+                    }
+                }
+            }.frame(width: effectiveSize, height: effectiveSize)
+        }
+    }
+}
+
+struct NotebookBackground: View {
+    var body: some View {
+        ZStack {
+            Color(hex: "F7F7F7")
+            notebook_bg_path_shape()
+                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+        }
+    }
+}
+
+struct notebook_bg_path_shape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let spacing: CGFloat = 28
+        for y in stride(from: spacing, to: rect.height, by: spacing) {
+            path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: rect.width, y: y))
+        }
+        return path
+    }
+}
+
+struct TicTacCell: View {
+    let player: Player?
+    let p1Icon: String
+    let p2Icon: String
+    let action: () -> Void
+    let size: CGFloat
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Rectangle()
+                    .fill(Color.black.opacity(0.001)) // Explicit hit-testable shape
+                    .contentShape(Rectangle())
+                
+                if let player = player {
+                    Text(player == .p1 ? p1Icon : p2Icon)
+                        .font(.system(size: size * 0.6))
+                        .shadow(radius: 1)
+                        // Bouncy Spring Transition
+                        .transition(.scale(scale: 0.1).combined(with: .opacity).animation(.spring(response: 0.4, dampingFraction: 0.5)))
+                }
+            }
+            .contentShape(Rectangle()) // Explicit hit testing shape
+        }
+        .buttonStyle(PlainButtonStyle()) // Don't scale cell on press logic (handled by ViewModel logic probably or we can add small press)
+    }
+}
+
+#Preview {
+    TicTacToeView(gameMode: .vsHuman)
 }

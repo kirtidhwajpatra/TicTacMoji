@@ -7,100 +7,185 @@ struct MainMenuView: View {
     @State private var showProfile = false
     @State private var showMultiplayer = false
     
+    @State private var showShare = false
+    
+    // Animation State
+    @State private var animateContent = false
+    
     var body: some View {
         ZStack {
-            Color(hex: "F2F2F7").ignoresSafeArea()
+            Color.white.ignoresSafeArea()
             
-            VStack(spacing: 30) {
-                // Header / Profile Summary
+            VStack {
+                // Header (Delay 0.1s)
                 HStack {
-                    Button(action: { showProfile = true }) {
-                        HStack {
-                            Text(profileManager.currentUser.avatarRawValue)
-                                .font(.system(size: 40))
-                                .padding(10)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                                .shadow(radius: 5)
-                            
-                            VStack(alignment: .leading) {
-                                Text("Hello,")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                Text(profileManager.currentUser.name)
-                                    .font(.headline)
-                                    .foregroundColor(.black)
-                            }
-                        }
-                    }
                     Spacer()
-                }
-                .padding()
-                
-                Spacer()
-                
-                // Title
-                VStack {
-                    Text("TicTacMoji")
-                        .font(.system(size: 48, weight: .heavy, design: .rounded))
-                        .foregroundColor(Color(hex: "EF553B"))
-                    Text("The classic game re-imagined")
-                        .font(.subheadline)
-                            .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                // Buttons
-                VStack(spacing: 20) {
-                    MenuButton(title: "Play vs Robot 🤖", color: Color(hex: "EF553B")) {
-                        currentView = .game(.vsMachine)
+                    Button(action: { showShare = true }) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 20))
+                            .foregroundColor(.black)
                     }
+                    .scaleEffect(animateContent ? 1 : 0.8)
+                    .opacity(animateContent ? 1 : 0)
                     
-                    MenuButton(title: "Play vs Friend 👥", color: Color(hex: "F3A333")) {
+                    SizedBox(width: 20)
+                    
+                    Button(action: { showProfile = true }) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 20))
+                            .foregroundColor(.black)
+                    }
+                    .scaleEffect(animateContent ? 1 : 0.8)
+                    .opacity(animateContent ? 1 : 0)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1), value: animateContent)
+                
+                Spacer().frame(height: 40)
+                
+                // Avatar & Greeting (Delay 0.2s)
+                VStack(spacing: 8) {
+                    Text(profileManager.currentUser.avatarRawValue)
+                        .font(.system(size: 60))
+                        .padding(10)
+                        .background(Color(hex: "F3F4F6"))
+                        .clipShape(Circle())
+                        .scaleEffect(animateContent ? 1 : 0.5)
+                        .opacity(animateContent ? 1 : 0)
+                    
+                    Text("Hi, \(profileManager.currentUser.name)")
+                        .font(.system(size: 18, design: .rounded))
+                        .foregroundColor(.black)
+                        .offset(y: animateContent ? 0 : 20)
+                        .opacity(animateContent ? 1 : 0)
+                }
+                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: animateContent)
+                
+                Spacer()
+                
+                // Title (Delay 0.3s)
+                VStack(spacing: 0) {
+                    Text("Welcome to")
+                        .font(.system(size: 16, design: .rounded))
+                        .foregroundColor(.gray)
+                        .offset(y: animateContent ? 0 : 20)
+                        .opacity(animateContent ? 1 : 0)
+                    Text("TicTacMoji")
+                        .font(.system(size: 42, weight: .heavy, design: .rounded))
+                        .foregroundColor(.black)
+                        .scaleEffect(animateContent ? 1 : 0.9)
+                        .opacity(animateContent ? 1 : 0)
+                }
+                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.3), value: animateContent)
+                
+                Spacer()
+                
+                // Buttons (Delay 0.4s+)
+                VStack(spacing: 16) {
+                    MenuPillButton(
+                        title: "Play vs Friend",
+                        icon: "person.2.fill",
+                        bgColor: Color(hex: "FDE047"),
+                        textColor: .black
+                    ) {
                         currentView = .game(.vsHuman)
                     }
+                    .offset(y: animateContent ? 0 : 50)
+                    .opacity(animateContent ? 1 : 0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.4), value: animateContent)
                     
-                    MenuButton(title: "Multiplayer 🌍", color: Color(hex: "65C466")) {
+                    MenuPillButton(
+                        title: "Play vs Robot",
+                        icon: "desktopcomputer",
+                        bgColor: Color(hex: "7C3AED"),
+                        textColor: .white
+                    ) {
+                        currentView = .game(.vsMachine)
+                    }
+                    .offset(y: animateContent ? 0 : 50)
+                    .opacity(animateContent ? 1 : 0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.5), value: animateContent)
+                    
+                    MenuPillButton(
+                        title: "Online Multiplayer",
+                        icon: "globe",
+                        bgColor: .black,
+                        textColor: .white
+                    ) {
                         showMultiplayer = true
                     }
+                    .offset(y: animateContent ? 0 : 50)
+                    .opacity(animateContent ? 1 : 0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.6), value: animateContent)
                 }
-                .padding(.horizontal, 40)
-                
-                Spacer()
+                .padding(.horizontal, 30)
+                .frame(maxWidth: 500) // Constrain width for iPad
+                .padding(.bottom, 60)
             }
+        }
+        .onAppear {
+            animateContent = true
         }
         .sheet(isPresented: $showProfile) {
             ProfileView()
         }
         .sheet(isPresented: $showMultiplayer) {
-            MultiplayerView() // No init args
+            MultiplayerView()
+        }
+        .sheet(isPresented: $showShare) {
+            ShareSheet(items: ["Come play TicTacMoji with me! 🍄🌼"])
         }
         .onChange(of: wsManager.gameState) { newState in
-            // When game becomes active (after countdown), switch view
             if newState == .active {
-                showMultiplayer = false 
+                showMultiplayer = false
                 currentView = .game(.onlineServer)
             }
         }
     }
 }
 
-struct MenuButton: View {
+// MARK: - Components
+
+struct ShareSheet: UIViewControllerRepresentable {
+    var items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct MenuPillButton: View {
     let title: String
-    let color: Color
+    let icon: String
+    let bgColor: Color
+    let textColor: Color
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(color)
-                .cornerRadius(20)
-                .shadow(color: color.opacity(0.4), radius: 10, y: 5)
+            HStack {
+                Text(title)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                Spacer()
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+            }
+            .foregroundColor(textColor)
+            .padding(.vertical, 18)
+            .padding(.horizontal, 24)
+            .background(bgColor)
+            .clipShape(Capsule())
+            .shadow(color: bgColor.opacity(0.3), radius: 5, y: 3)
         }
+        .buttonStyle(ScaleButtonStyle()) // Apply Haptic Scale Style
+    }
+}
+
+struct SizedBox: View {
+    var width: CGFloat?
+    var height: CGFloat?
+    var body: some View {
+        Spacer().frame(width: width, height: height)
     }
 }

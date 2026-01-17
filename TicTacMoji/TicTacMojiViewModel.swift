@@ -134,6 +134,9 @@ class TicTacToeViewModel: ObservableObject {
             wsManager?.isMyTurn = false // Optimistic update
         }
         
+        // Robot: Block input if it's Robot's turn (P2)
+        if gameMode == .vsMachine && activePlayer == .p2 { return }
+        
         makeMove(index: index, player: activePlayer)
         
         // Machine Move
