@@ -11,7 +11,7 @@ class WebSocketManager: ObservableObject {
     static let shared = WebSocketManager()
     
     // Cloud Server URL (Render)
-    private let url = URL(string: "wss://englishcallingapp.onrender.com")!
+    private let url = URL(string: "wss://tictactoe-signaling.onrender.com")!
     
     // Local Testing (iPad Device requires actual IP)
     // private let url = URL(string: "ws://10.25.254.242:8080")!
