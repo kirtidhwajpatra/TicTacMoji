@@ -13,7 +13,7 @@ class WebSocketManager: ObservableObject {
     // Cloud Server URL (Render)
     private let url = URL(string: "wss://englishcallingapp.onrender.com")!
     
-    // Local Testing (Commented out)
+    // Local Testing (iPad Device requires actual IP)
     // private let url = URL(string: "ws://10.25.254.242:8080")!
 
     
