@@ -20,6 +20,7 @@ class WebSocketManager: ObservableObject {
     private var webSocketTask: URLSessionWebSocketTask?
     
     @Published var isConnected = false
+    @Published var errorMessage: String? // Track errors
     @Published var gameState: ServerGameState = .disconnected
     @Published var roomId: String?
     @Published var receivedMove: Int?
@@ -149,8 +150,14 @@ class WebSocketManager: ObservableObject {
                         self.opponentName = name
                         self.opponentAvatar = avatar
                     }
+                    self.opponentAvatar = avatar
                 }
-            // case "error": removed (reverted logic)
+            case "error":
+                if let msg = json["message"] as? String {
+                    self.errorMessage = msg
+                    // Clean up if join failed
+                    self.roomId = nil
+                }
             // ... other cases ...
             case "player_joined":
                 self.gameState = .countingDown

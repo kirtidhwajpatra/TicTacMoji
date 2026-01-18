@@ -126,7 +126,20 @@ struct CreateOrJoinView: View {
                 .padding(.horizontal, 40)
             }
         }
+        // Error Alert
+        .alert(item: Binding<AlertError?>(
+            get: { wsManager.errorMessage.map { AlertError(message: $0) } },
+            set: { _ in wsManager.errorMessage = nil }
+        )) { error in
+            Alert(title: Text("Error"), message: Text(error.message), dismissButton: .default(Text("OK")))
+        }
     }
+}
+
+// Helper for Alert
+struct AlertError: Identifiable {
+    let id = UUID()
+    let message: String
 }
 
 struct RoomCodeView: View {
