@@ -33,10 +33,12 @@ struct MultiplayerView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: handleClose) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(Color(hex: "E5E7EB")) // Light Gray
-                            .symbolRenderingMode(.hierarchical)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold)) // Smaller icon
+                            .foregroundColor(.gray)
+                            .padding(8)
+                            .background(Color(hex: "F3F4F6")) // Single soft background
+                            .clipShape(Circle())
                     }
                 }
             }
@@ -78,7 +80,7 @@ struct CreateOrJoinView: View {
                 .foregroundColor(.black)
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color(hex: "FDE047")) // Main Yellow
+                .background(Color(hex: "FDE047")) 
                 .clipShape(Capsule())
             }
             .padding(.horizontal, 40)
@@ -111,7 +113,7 @@ struct CreateOrJoinView: View {
                             withAnimation { wsManager.joinRoom(roomId: joinRoomId.uppercased()) }
                         }
                     }) {
-                        Image(systemName: "arrow.right")
+                         Image(systemName: "arrow.right")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(!joinRoomId.isEmpty ? .black : .gray.opacity(0.5))
                             .frame(width: 60, height: 60)

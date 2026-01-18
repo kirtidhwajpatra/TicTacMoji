@@ -25,8 +25,8 @@ class WebSocketManager: ObservableObject {
     @Published var receivedMove: Int?
     @Published var countdown: Int?
     @Published var isMyTurn = false
-    @Published var isRematchRequested = false // State for UI
-    @Published var playerIndex: Int? // 0 = Host (X), 1 = Guest (O)
+    @Published var isRematchRequested = false 
+    @Published var playerIndex: Int? 
     @Published var opponentName: String?
     @Published var opponentAvatar: String?
     
@@ -38,10 +38,6 @@ class WebSocketManager: ObservableObject {
         webSocketTask?.resume()
         receiveMessage()
         
-        // Send a ping or just assume connected on open?
-        // WebSocket doesn't have "onOpen" callback in URLSession easily unless delegate.
-        // We'll assume connected for UI purposes or wait for first message if server sent one.
-        // Let's just set connected.
         DispatchQueue.main.async {
             self.isConnected = true
             self.gameState = .menu
@@ -144,9 +140,9 @@ class WebSocketManager: ObservableObject {
             case "joined_room":
                 if let rId = json["roomId"] as? String {
                     self.roomId = rId
-                    self.gameState = .waitingForPlayer // Actually waiting for countdown
+                    self.gameState = .waitingForPlayer 
                     self.playerIndex = 1
-                    
+                    // ... opponent data ...
                     if let opponent = json["opponent"] as? [String: Any],
                        let name = opponent["name"] as? String,
                        let avatar = opponent["avatar"] as? String {
@@ -154,17 +150,16 @@ class WebSocketManager: ObservableObject {
                         self.opponentAvatar = avatar
                     }
                 }
+            // case "error": removed (reverted logic)
+            // ... other cases ...
             case "player_joined":
-                // Host sees this
-                // Countdown starts automatically on server, but we can update UI
                 self.gameState = .countingDown
-                
-                if let opponent = json["opponent"] as? [String: Any],
-                   let name = opponent["name"] as? String,
-                   let avatar = opponent["avatar"] as? String {
-                    self.opponentName = name
-                    self.opponentAvatar = avatar
-                }
+                 if let opponent = json["opponent"] as? [String: Any],
+                    let name = opponent["name"] as? String,
+                    let avatar = opponent["avatar"] as? String {
+                     self.opponentName = name
+                     self.opponentAvatar = avatar
+                 }
             case "countdown":
                 if let count = json["count"] as? Int {
                     self.countdown = count
@@ -173,8 +168,7 @@ class WebSocketManager: ObservableObject {
             case "game_start":
                 self.gameState = .active
                 self.countdown = nil
-                self.isRematchRequested = false // Reset state
-                // Reset turn logic: Host (0) starts
+                self.isRematchRequested = false
                 self.isMyTurn = (self.playerIndex == 0)
                 
             case "rematch_requested":
@@ -187,8 +181,6 @@ class WebSocketManager: ObservableObject {
                 }
             case "opponent_left":
                 self.gameState = .opponentLeft
-            case "error":
-                print("Server error: \(json["message"] ?? "")")
             default:
                 break
             }
