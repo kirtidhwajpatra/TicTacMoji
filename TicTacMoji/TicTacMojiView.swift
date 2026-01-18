@@ -98,7 +98,12 @@ struct GameContent: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Button(action: onDismiss) {
+                Button(action: {
+                    if viewModel.gameMode == .onlineServer {
+                        viewModel.leaveOnlineGame()
+                    }
+                    onDismiss()
+                }) {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.black)
@@ -162,30 +167,76 @@ struct GameContent: View {
                     .padding(.bottom, 40)
             }
         }
+        .overlay(
+            Group {
+                if viewModel.showFloatingPoint {
+                    FlyingScoreView(score: 1, position: viewModel.lastWinnerP1 ? 1 : 2)
+                }
+            }
+        )
+            }
+        )
+        .alert(isPresented: $viewModel.opponentLeftGame) {
+            Alert(
+                title: Text("Opponent Left"),
+                message: Text("The other player has left the room."),
+                dismissButton: .default(Text("Return to Menu"), action: {
+                    onDismiss()
+                })
+            )
+        }
     }
 }
 
-// MARK: - Subviews
-
 struct ScorePill: View {
     @ObservedObject var viewModel: TicTacToeViewModel
+    
+    @State private var p1Pop = false
+    @State private var p2Pop = false
+    
     var body: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 4) {
+        HStack(spacing: 20) {
+            HStack(spacing: 6) {
                 Text(viewModel.p1Avatar)
-                Text("\(viewModel.p1Score)").fontWeight(.bold)
+                Text("\(viewModel.p1Score)")
+                    .fontWeight(.bold)
+                    // P1 Pop Animation
+                    .scaleEffect(p1Pop ? 1.5 : 1.0)
+                    .foregroundColor(p1Pop ? Color(hex: "FDE047") : .black)
+                    .shadow(color: p1Pop ? .yellow.opacity(0.8) : .clear, radius: p1Pop ? 4 : 0)
             }
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Text(viewModel.p2Avatar)
-                Text("\(viewModel.p2Score)").fontWeight(.bold)
+                Text("\(viewModel.p2Score)")
+                    .fontWeight(.bold)
+                    // P2 Pop Animation
+                    .scaleEffect(p2Pop ? 1.5 : 1.0)
+                    .foregroundColor(p2Pop ? Color(hex: "FDE047") : .black)
+                    .shadow(color: p2Pop ? .yellow.opacity(0.8) : .clear, radius: p2Pop ? 4 : 0)
             }
         }
-        .font(.system(size: 16, design: .rounded))
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
+        .font(.system(size: 18, weight: .semibold, design: .rounded)) // Larger font
+        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
         .background(Color(hex: "F3F4F6"))
         .clipShape(Capsule())
         .foregroundColor(.black)
+        .background(
+             Capsule().stroke(Color.gray.opacity(0.1), lineWidth: 1)
+        )
+        // Trigger Animations
+        .onChange(of: viewModel.p1Score) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { p1Pop = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                 withAnimation { p1Pop = false }
+            }
+        }
+        .onChange(of: viewModel.p2Score) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { p2Pop = true }
+             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                 withAnimation { p2Pop = false }
+            }
+        }
     }
 }
 
@@ -336,12 +387,17 @@ struct BoardGrid: View {
                             let isWinning = viewModel.winningIndices.contains(index)
                             let isGameOver = !viewModel.winningIndices.isEmpty
                             
+                            // Sequential Delay: 0ms, 150ms, 300ms
+                            let winOrder = viewModel.winningIndices.sorted().firstIndex(of: index) ?? 0
+                            let winDelay = Double(winOrder) * 0.15
+                            
                             TicTacCell(
                                 player: viewModel.board[index],
                                 p1Icon: viewModel.p1Avatar,
                                 p2Icon: viewModel.p2Avatar,
                                 isWinning: isWinning,
                                 isDimmed: isGameOver && !isWinning,
+                                winDelay: winDelay,
                                 action: { viewModel.processMove(at: index) },
                                 size: cellSize
                             ).frame(width: cellSize, height: cellSize)
@@ -380,36 +436,49 @@ struct TicTacCell: View {
     let p2Icon: String
     let isWinning: Bool
     var isDimmed: Bool = false
+    var winDelay: Double = 0 // New Property
     let action: () -> Void
     let size: CGFloat
     
     @State private var rotateRainbow = false
+    @State private var winPulse = false 
+    @State private var showSplash = false
+    @State private var splashCheck = false
     
     var body: some View {
         Button(action: action) {
             ZStack {
                 Rectangle()
-                    .fill(Color.black.opacity(0.001)) // Explicit hit-testable shape
+                    .fill(Color.black.opacity(0.001))
                     .contentShape(Rectangle())
                 
                 if let player = player {
-                    // Subtle Background Glow for Winners
+                    // Subtle Background Glow for Winners (STATIC)
                     if isWinning {
                         Circle()
                             .fill(
                                 AngularGradient(gradient: Gradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red]), center: .center)
                             )
-                            .frame(width: size * 0.85, height: size * 0.85)
-                            .blur(radius: 10) // Soft Glow effect
-                            .opacity(0.5)
-                            .rotationEffect(.degrees(rotateRainbow ? 360 : 0))
+                            .frame(width: size * 0.9, height: size * 0.9)
+                            .blur(radius: 10)
+                            .opacity(0.6)
+                            // NO ANIMATION on background
                             .onAppear {
-                                withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
-                                    rotateRainbow = true
+                                // Sequential Pulse for Avatar ONLY
+                                winPulse = false // Reset first
+                                withAnimation(
+                                    .easeInOut(duration: 0.8)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(winDelay) 
+                                ) {
+                                    winPulse = true
                                 }
                             }
+                            .onChange(of: isWinning) { winning in
+                                if !winning { winPulse = false } // Explicit Reset
+                            }
                     } else {
-                        // Move Splash Effect (Only once on appear)
+                        // Move Splash Effect
                         if showSplash {
                              Circle()
                                 .stroke(Color.gray.opacity(0.4), lineWidth: 2)
@@ -419,28 +488,57 @@ struct TicTacCell: View {
                     }
                     
                     Text(player == .p1 ? p1Icon : p2Icon)
-                        .font(.system(size: size * 0.6)) // Standard Size
+                        .font(.system(size: size * 0.6))
                         .shadow(radius: isWinning ? 2 : 1)
-                        .opacity(isDimmed ? 0.3 : 1.0) // Dim losers
-                        .grayscale(isDimmed ? 1.0 : 0.0) // Optional: Grayscale losers
+                        .scaleEffect(isWinning ? (winPulse ? 1.2 : 1.0) : 1.0) // Pulse Avatar
+                        .opacity(isDimmed ? 0.3 : 1.0)
                         // Bouncy Entrance
                         .transition(.scale(scale: 0.1).combined(with: .opacity).animation(.spring(response: 0.4, dampingFraction: 0.5)))
                         .onAppear {
-                            // Trigger Splash
-                            // Use a slight delay to sync with bounce
-                            showSplash = true
-                            withAnimation(.easeOut(duration: 0.5)) {
-                                splashCheck = true
+                            if !isWinning {
+                                showSplash = true
+                                withAnimation(.easeOut(duration: 0.5)) {
+                                    splashCheck = true
+                                }
                             }
                         }
                 }
             }
-            .contentShape(Rectangle()) // Explicit hit testing shape
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlainButtonStyle()) // Don't scale cell on press logic (handled by ViewModel logic probably or we can add small press)
+        .buttonStyle(PlainButtonStyle())
     }
-    @State private var showSplash = false
-    @State private var splashCheck = false
+}
+
+struct FlyingScoreView: View {
+    let score: Int
+    let position: Int // 1 for P1 (Left), 2 for P2 (Right)
+    @State private var offset: CGFloat = 0
+    @State private var opacity: Double = 1.0
+    @State private var scale: CGFloat = 0.5
+    
+    var body: some View {
+        Text("+1")
+            .font(.system(size: 60, weight: .bold, design: .rounded))
+            .foregroundColor(Color(hex: "FDE047"))
+            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .offset(x: position == 1 ? -60 : 60, y: offset)
+            .onAppear {
+                // Animate Up towards Pill
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                    scale = 1.2
+                    offset = -250 // Move UP significantly towards pill
+                }
+                
+                // Fade out at end
+                withAnimation(.easeIn(duration: 0.3).delay(0.5)) {
+                    opacity = 0
+                    scale = 0.5
+                }
+            }
+    }
 }
 
 struct WinningGradient: View {

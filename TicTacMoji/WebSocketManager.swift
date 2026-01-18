@@ -55,6 +55,21 @@ class WebSocketManager: ObservableObject {
         }
     }
     
+    func leaveRoom() {
+        // Disconnect and Reconnect to clear server state
+        disconnect()
+        roomId = nil
+        gameState = .menu
+        isRematchRequested = false
+        receivedMove = nil
+        opponentName = nil
+        
+        // Slight delay before reconnecting to ensure clean break
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.connect()
+        }
+    }
+    
     func createRoom() {
         let user = ProfileManager.shared.currentUser
         let userData = ["name": user.name, "avatar": user.avatarRawValue]

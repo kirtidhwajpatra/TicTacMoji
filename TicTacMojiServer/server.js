@@ -144,16 +144,27 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        if (currentRoomId && rooms[currentRoomId]) {
-            console.log(`Client disconnected from room ${currentRoomId}`);
+        const rId = ws.roomId;
+        if (rId && rooms[rId]) {
+            console.log(`Client disconnected from room ${rId}`);
             // Notify opponent
-            const room = rooms[currentRoomId];
+            const room = rooms[rId];
             room.players.forEach(p => {
                 if (p !== ws && p.readyState === WebSocket.OPEN) {
                     p.send(JSON.stringify({ type: 'opponent_left' }));
                 }
             });
-            delete rooms[currentRoomId];
+            // Should we delete room immediately? Maybe wait for reconnect? 
+            // For now, delete if empty or one player left? 
+            // Usually if host leaves room is dead.
+            // Let's keep logic simple: clean up room if both gone or game broken
+
+            // Remove player from room
+            room.players = room.players.filter(p => p !== ws);
+
+            if (room.players.length === 0) {
+                delete rooms[rId];
+            }
         }
     });
 });

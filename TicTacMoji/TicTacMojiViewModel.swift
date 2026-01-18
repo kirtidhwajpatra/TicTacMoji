@@ -22,6 +22,11 @@ class TicTacToeViewModel: ObservableObject {
     @Published var isOpponentReady: Bool = false
     @Published var waitingForRematch: Bool = false
     
+    // Animation State
+    @Published var showFloatingPoint: Bool = false
+    @Published var lastWinnerP1: Bool = true
+    @Published var opponentLeftGame: Bool = false
+    
     var gameMode: GameMode = .vsHuman
     var wsManager: WebSocketManager?
     private var cancellables = Set<AnyCancellable>()
@@ -76,7 +81,10 @@ class TicTacToeViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
                 if state == .opponentLeft {
-                    // Handle opponent left
+                    self?.gameState = .won(.p1) 
+                    self?.activePlayer = .p1 
+                    self?.opponentLeftGame = true // Trigger Alert
+                    SoundManager.shared.playWinSound()
                 }
             }
             .store(in: &cancellables)
@@ -173,7 +181,20 @@ class TicTacToeViewModel: ObservableObject {
             }
             
             // Score update (Server tracks or local?)
-            if player == .p1 { p1Score += 1 } else { p2Score += 1 }
+            if player == .p1 { 
+                p1Score += 1 
+                lastWinnerP1 = true
+            } else { 
+                p2Score += 1 
+                lastWinnerP1 = false
+            }
+            
+            // Trigger Flying Score
+            showFloatingPoint = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                self.showFloatingPoint = false
+            }
+            
             HapticManager.shared.successFeedback()
         } else if !board.contains(nil) {
             gameState = .draw
@@ -234,6 +255,10 @@ class TicTacToeViewModel: ObservableObject {
         activePlayer = .p1
         gameState = .active
         winningIndices = []
+    }
+    
+    func leaveOnlineGame() {
+        wsManager?.leaveRoom()
     }
     
     // MARK: - Helper

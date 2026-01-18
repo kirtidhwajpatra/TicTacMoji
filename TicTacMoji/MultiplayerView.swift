@@ -7,119 +7,225 @@ struct MultiplayerView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                if wsManager.isConnected {
-                    if let roomId = wsManager.roomId {
-                        // Room Created/Joined
-                        VStack(spacing: 20) {
-                            Text("Room Code")
-                                .font(.headline)
-                            Text(roomId)
-                                .font(.system(size: 40, weight: .bold, design: .monospaced))
-                                .padding()
-                                .background(Color.gray.opacity(0.1))
-                                .cornerRadius(12)
-                            
-                            ShareLink(item: URL(string: "tictacmoji://join?room=\(roomId)")!) {
-                                Label("Share Link", systemImage: "square.and.arrow.up")
-                                    .font(.headline)
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                            .padding(.horizontal)
-                            
-                            if wsManager.gameState == .waitingForPlayer {
-                                HStack {
-                                    ProgressView()
-                                    Text("Waiting for opponent...")
-                                        .foregroundColor(.gray)
-                                }
-                            } else if wsManager.gameState == .countingDown {
-                                Text("Starting game...")
-                                    .font(.title)
-                                    .foregroundColor(.green)
-                            }
-                        }
-                    } else {
-                        // Menu
-                        VStack(spacing: 20) {
-                            Button(action: {
-                                wsManager.createRoom()
-                            }) {
-                                Text("Create Room")
-                                    .font(.headline)
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.green)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                            
-                            HStack {
-                                TextField("Enter Room Code", text: $joinRoomId)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .textCase(.uppercase)
-                                    .autocapitalization(.allCharacters)
-                                
-                                Button("Join") {
-                                    if !joinRoomId.isEmpty {
-                                        wsManager.joinRoom(roomId: joinRoomId.uppercased())
-                                    }
-                                }
-                                .disabled(joinRoomId.isEmpty)
-                            }
-                            .padding()
-                        }
-                        .padding()
-                    }
-                } else {
-                    if case .connectionError(let error) = wsManager.gameState {
-                         VStack(spacing: 16) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 50))
-                                .foregroundColor(.orange)
-                            Text("Connection Failed")
-                                .font(.headline)
-                            Text(error)
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                            
-                            Button(action: {
-                                wsManager.connect()
-                            }) {
-                                Text("Retry Connection")
-                                    .fontWeight(.bold)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(10)
-                            }
-                        }
-                        .padding()
-                    } else {
-                        ProgressView("Connecting to Server...")
-                            .onAppear {
-                                wsManager.connect()
-                            }
-                    }
-                }
+            ZStack {
+                Color.white.ignoresSafeArea()
                 
-                Spacer()
+                VStack(spacing: 0) {
+                    // Content
+                    if wsManager.isConnected {
+                        if let roomId = wsManager.roomId {
+                            RoomCodeView(roomId: roomId, wsManager: wsManager)
+                        } else {
+                            CreateOrJoinView(wsManager: wsManager, joinRoomId: $joinRoomId)
+                        }
+                    } else {
+                        ConnectionStateView(wsManager: wsManager)
+                    }
+                    Spacer()
+                }
+                .padding(.top, 20)
             }
-            .navigationTitle("Online Multiplayer")
-            .navigationBarItems(trailing: Button("Close") { dismiss() })
-            .onChange(of: wsManager.gameState) { newState in
-                if newState == .active {
-                    // Navigate to game automatically?
-                    // Handled by AppView state in TicTacMojiApp usually, 
-                    // but here we might need to notify parent.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Online Multiplayer")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: handleClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(Color(hex: "E5E7EB")) // Light Gray
+                            .symbolRenderingMode(.hierarchical)
+                    }
                 }
             }
+        }
+    }
+    
+    func handleClose() {
+        if wsManager.roomId != nil {
+            // Leave Room but stay in Multiplayer Menu
+            withAnimation {
+                wsManager.leaveRoom()
+            }
+        } else {
+            // Dismiss Multiplayer Sheet
+            dismiss()
+        }
+    }
+}
+
+// MARK: - Subviews
+
+struct CreateOrJoinView: View {
+    @ObservedObject var wsManager: WebSocketManager
+    @Binding var joinRoomId: String
+    
+    var body: some View {
+        VStack(spacing: 40) {
+            Spacer().frame(height: 20)
+            
+            // Create Room
+            Button(action: {
+                withAnimation { wsManager.createRoom() }
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Create New Room")
+                }
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(.black)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color(hex: "FDE047")) // Main Yellow
+                .clipShape(Capsule())
+            }
+            .padding(.horizontal, 40)
+            .buttonStyle(ScaleButtonStyle())
+            
+            HStack {
+                Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 1)
+                Text("OR").font(.caption).foregroundColor(.gray)
+                Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 1)
+            }.padding(.horizontal, 60)
+            
+            // Join Room
+            VStack(spacing: 16) {
+                Text("Enter Room Code to Join")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundColor(.gray)
+                
+                HStack(spacing: 12) {
+                    TextField("CODE", text: $joinRoomId)
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .textCase(.uppercase)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                        .background(Color(hex: "F3F4F6"))
+                        .cornerRadius(16)
+                        .frame(height: 60)
+                    
+                    Button(action: {
+                        if !joinRoomId.isEmpty {
+                            withAnimation { wsManager.joinRoom(roomId: joinRoomId.uppercased()) }
+                        }
+                    }) {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(!joinRoomId.isEmpty ? .black : .gray.opacity(0.5))
+                            .frame(width: 60, height: 60)
+                            .background(!joinRoomId.isEmpty ? Color(hex: "FDE047") : Color(hex: "F3F4F6"))
+                            .clipShape(Circle())
+                    }
+                    .disabled(joinRoomId.isEmpty)
+                    .buttonStyle(ScaleButtonStyle())
+                }
+                .padding(.horizontal, 40)
+            }
+        }
+    }
+}
+
+struct RoomCodeView: View {
+    let roomId: String
+    @ObservedObject var wsManager: WebSocketManager
+    
+    var body: some View {
+        VStack(spacing: 30) {
+            Spacer().frame(height: 20)
+            
+            VStack(spacing: 10) {
+                Text("ROOM CODE")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(.gray)
+                    .tracking(2)
+                
+                Text(roomId)
+                    .font(.system(size: 60, weight: .bold, design: .rounded))
+                    .foregroundColor(.black)
+                    .tracking(2)
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        NotebookBackground() // Reusing the pattern if visible? Or just clean
+                            .opacity(0.5)
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                    )
+                    .padding(.horizontal, 40)
+            }
+            
+            if wsManager.gameState == .waitingForPlayer {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Waiting for opponent...")
+                        .font(.system(size: 16, design: .rounded))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 20)
+                
+                ShareLink(item: URL(string: "tictacmoji://join?room=\(roomId)")!) {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                        Text("Share Link")
+                    }
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(.black)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 30)
+                    .background(Color(hex: "F3F4F6"))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(ScaleButtonStyle())
+                
+            } else if wsManager.gameState == .countingDown {
+                VStack(spacing: 10) {
+                    Text("Game Starting!")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    if let count = wsManager.countdown {
+                        Text("\(count)")
+                            .font(.system(size: 60, weight: .bold))
+                            .foregroundColor(Color(hex: "FDE047"))
+                            .transition(.scale)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ConnectionStateView: View {
+    @ObservedObject var wsManager: WebSocketManager
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            if case .connectionError(let error) = wsManager.gameState {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 50))
+                    .foregroundColor(.gray)
+                Text("Connection Issue")
+                    .font(.headline)
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                
+                Button("Retry") {
+                    wsManager.connect()
+                }
+                .padding()
+            } else {
+                ProgressView()
+                Text("Connecting to Server...")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .onAppear { wsManager.connect() }
+            }
+            Spacer()
         }
     }
 }
