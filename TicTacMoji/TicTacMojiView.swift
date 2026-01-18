@@ -174,8 +174,6 @@ struct GameContent: View {
                 }
             }
         )
-            }
-        )
         .alert(isPresented: $viewModel.opponentLeftGame) {
             Alert(
                 title: Text("Opponent Left"),
