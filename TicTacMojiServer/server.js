@@ -1,36 +1,65 @@
+const http = require('http');
 const WebSocket = require('ws');
-const port = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port: port, host: '0.0.0.0' });
+
+const PORT = process.env.PORT || 8080;
+
+// Initialize HTTP Server for Health Checks and WS Upgrade
+const server = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
+    } else {
+        res.writeHead(404);
+        res.end();
+    }
+});
+
+// Attach WebSocket Server to HTTP Server
+const wss = new WebSocket.Server({ server });
 
 const rooms = {};
+
+// Heartbeat to detect stale connections
+const interval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) return ws.terminate();
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
+
+wss.on('close', () => clearInterval(interval));
 
 function generateRoomId() {
     return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-console.log(' TicTacMoji Server started on port 8080');
-
 wss.on('connection', (ws) => {
-    let currentRoomId = null;
-    let playerIndex = null;
-    console.log('New client connected');
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
 
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
-            console.log('Received:', data);
 
+            // Create Room
             if (data.type === 'create_room') {
                 const roomId = generateRoomId();
-                // Store userData on the socket
                 const userData = data.userData || { name: 'Player 1', avatar: '😎' };
                 ws.userData = userData;
-
-                rooms[roomId] = { players: [ws], turn: 0, board: Array(9).fill(null), gameActive: false };
                 ws.roomId = roomId;
+
+                rooms[roomId] = {
+                    players: [ws],
+                    turn: 0,
+                    board: Array(9).fill(null),
+                    gameActive: false
+                };
+
                 ws.send(JSON.stringify({ type: 'room_created', roomId }));
-                console.log(`Room ${roomId} created`);
             }
+
+            // Join Room
             else if (data.type === 'join_room') {
                 const roomId = data.roomId;
                 const guestData = data.userData || { name: 'Player 2', avatar: '🤠' };
@@ -42,159 +71,130 @@ wss.on('connection', (ws) => {
 
                     const host = rooms[roomId].players[0];
 
-                    // Notify Host that Guest joined (send Guest data)
+                    // Notify Host
                     host.send(JSON.stringify({
                         type: 'player_joined',
                         opponent: guestData
                     }));
 
-                    // Notify Guest that they joined (send Host data)
+                    // Notify Guest
                     ws.send(JSON.stringify({
                         type: 'joined_room',
                         roomId,
                         opponent: host.userData
                     }));
 
-                    console.log(`Player joined room ${roomId}`);
-
-                    // Start Countdown
-                    let count = 3;
-                    rooms[roomId].countdownInterval = setInterval(() => {
-                        broadcastToRoom(rooms[roomId], { type: 'countdown', count });
-                        if (count === 0) {
-                            clearInterval(rooms[roomId].countdownInterval);
-                            rooms[roomId].gameActive = true;
-                            broadcastToRoom(rooms[roomId], { type: 'game_start' });
-                        }
-                        count--;
-                    }, 1000);
-
+                    startCountdown(roomId);
                 } else {
                     ws.send(JSON.stringify({ type: 'error', message: 'Room full or invalid' }));
                 }
             }
+
+            // Game Move
             else if (data.type === 'move') {
                 const roomId = ws.roomId;
                 if (roomId && rooms[roomId] && rooms[roomId].gameActive) {
                     const room = rooms[roomId];
                     const playerIndex = room.players.indexOf(ws);
 
-                    if (room.turn === playerIndex) {
-                        const index = data.index;
-                        if (room.board[index] === null) {
-                            room.board[index] = playerIndex;
-                            room.turn = 1 - room.turn;
+                    if (room.turn === playerIndex && room.board[data.index] === null) {
+                        room.board[data.index] = playerIndex;
+                        room.turn = 1 - room.turn;
 
-                            // Broadcast move to opponent
-                            const opponent = room.players.find(p => p !== ws);
-                            if (opponent) {
-                                opponent.send(JSON.stringify({
-                                    type: 'opponent_move',
-                                    index: index,
-                                    player: playerIndex
-                                }));
-                            }
+                        const opponent = room.players.find(p => p !== ws);
+                        if (opponent) {
+                            opponent.send(JSON.stringify({
+                                type: 'opponent_move',
+                                index: data.index,
+                                player: playerIndex
+                            }));
                         }
                     }
                 }
             }
-            // Rematch Logic
+
+            // Rematch Request
             else if (data.type === 'request_rematch') {
                 const roomId = ws.roomId;
                 if (roomId && rooms[roomId]) {
                     const room = rooms[roomId];
                     ws.wantsRematch = true;
 
-                    const otherPlayer = room.players.find(p => p !== ws);
-
-                    if (otherPlayer) {
-                        if (otherPlayer.wantsRematch) {
-                            // Both want rematch -> Start Game
-                            console.log(`Rematch started in room ${roomId}`);
-                            room.board = Array(9).fill(null);
-                            room.turn = 0; // Reset turn to Host
-                            room.gameActive = false; // Wait for countdown
-                            room.players.forEach(p => p.wantsRematch = false); // Reset flag
-
-                            // Start Countdown
-                            let count = 3;
-                            room.countdownInterval = setInterval(() => {
-                                broadcastToRoom(room, { type: 'countdown', count });
-                                if (count === 0) {
-                                    clearInterval(room.countdownInterval);
-                                    room.gameActive = true;
-                                    broadcastToRoom(room, { type: 'game_start' });
-                                }
-                                count--;
-                            }, 1000);
+                    const opponent = room.players.find(p => p !== ws);
+                    if (opponent) {
+                        if (opponent.wantsRematch) {
+                            startRematch(roomId);
                         } else {
-                            // Notify opponent
-                            otherPlayer.send(JSON.stringify({ type: 'rematch_requested' }));
+                            opponent.send(JSON.stringify({ type: 'rematch_requested' }));
                         }
                     }
                 }
             }
-            else if (data.type === 'game_over') {
-                // Relay game over if needed, mostly client side
-            }
 
         } catch (e) {
-            console.error('Error parsing message', e);
+            console.error('Message parsing failed:', e.message);
         }
     });
 
     ws.on('close', () => {
-        const rId = ws.roomId;
-        if (rId && rooms[rId]) {
-            console.log(`Client disconnected from room ${rId}`);
-            // Notify opponent
-            const room = rooms[rId];
+        const roomId = ws.roomId;
+        if (roomId && rooms[roomId]) {
+            const room = rooms[roomId];
+
+            // Notify other player
             room.players.forEach(p => {
                 if (p !== ws && p.readyState === WebSocket.OPEN) {
                     p.send(JSON.stringify({ type: 'opponent_left' }));
                 }
             });
-            // Should we delete room immediately? Maybe wait for reconnect? 
-            // For now, delete if empty or one player left? 
-            // Usually if host leaves room is dead.
-            // Let's keep logic simple: clean up room if both gone or game broken
 
-            // Remove player from room
+            // Cleanup
             room.players = room.players.filter(p => p !== ws);
-
             if (room.players.length === 0) {
-                delete rooms[rId];
+                delete rooms[roomId];
             }
         }
     });
 });
 
 function startCountdown(roomId) {
-    let count = 3;
     const room = rooms[roomId];
     if (!room) return;
 
-    console.log(`Starting countdown for room ${roomId}`);
+    let count = 3;
+    broadcastToRoom(room, { type: 'countdown', count });
 
-    // Immediate 3
-    broadcastToRoom(room, { type: 'countdown', count: 3 });
-
-    const interval = setInterval(() => {
+    room.countdownInterval = setInterval(() => {
         count--;
         if (count > 0) {
-            broadcastToRoom(room, { type: 'countdown', count: count });
+            broadcastToRoom(room, { type: 'countdown', count });
         } else {
-            clearInterval(interval);
+            clearInterval(room.countdownInterval);
+            room.gameActive = true;
             broadcastToRoom(room, { type: 'game_start' });
         }
     }, 1000);
 }
 
+function startRematch(roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    room.board = Array(9).fill(null);
+    room.turn = 0;
+    room.gameActive = false;
+    room.players.forEach(p => p.wantsRematch = false);
+
+    startCountdown(roomId);
+}
+
 function broadcastToRoom(room, message) {
-    const msgString = JSON.stringify(message);
+    const msg = JSON.stringify(message);
     room.players.forEach(p => {
-        if (p.readyState === WebSocket.OPEN) {
-            p.send(msgString);
-        }
+        if (p.readyState === WebSocket.OPEN) p.send(msg);
     });
 }
+
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
