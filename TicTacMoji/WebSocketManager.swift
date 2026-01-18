@@ -150,7 +150,8 @@ class WebSocketManager: ObservableObject {
                         self.opponentName = name
                         self.opponentAvatar = avatar
                     }
-                    self.opponentAvatar = avatar
+                    // The line below was problematic, removed as it was outside the if let and used an undefined 'avatar'
+                    // self.opponentAvatar = avatar 
                 }
             case "error":
                 if let msg = json["message"] as? String {
